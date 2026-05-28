@@ -1,5 +1,6 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import axios from 'axios'
 import {
   FaCar,
   FaMoneyBillWave,
@@ -11,8 +12,20 @@ import {
 } from 'react-icons/fa'
 
 function Dashboard() {
-
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [user, setUser] = useState(null)
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const res = await axios.get('http://localhost:5000/profile', { withCredentials: true })
+        setUser(res.data.user)
+      } catch (err) {
+        setUser(null)
+      }
+    }
+    fetchProfile()
+  }, [])
 
   return (
     <div className="flex min-h-screen bg-gray-100">
@@ -108,7 +121,7 @@ function Dashboard() {
       <div className="flex-1">
 
         {/* TOPBAR */}
-        <div className="bg-white shadow-md p-5 flex justify-between items-center">
+        <div className="bg-white shadow-md p-5 flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
 
           <div>
             <h1 className="text-3xl font-bold text-gray-800">
@@ -119,6 +132,22 @@ function Dashboard() {
               Welcome to the SmartPark Garage management system.
             </p>
           </div>
+
+          {user && (
+            <div className="flex items-center gap-3 rounded-3xl border border-gray-200 bg-gray-50 px-4 py-3">
+              <div className="h-12 w-12 overflow-hidden rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xl font-semibold">
+                {user.picture ? (
+                  <img src={user.picture} alt='profile' className='h-full w-full object-cover' />
+                ) : (
+                  user.username?.charAt(0).toUpperCase()
+                )}
+              </div>
+              <div>
+                <p className="text-lg font-semibold text-gray-800">{user.username}</p>
+                <p className="text-sm text-gray-500">Account profile</p>
+              </div>
+            </div>
+          )}
 
         </div>
 

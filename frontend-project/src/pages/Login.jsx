@@ -19,9 +19,15 @@ function Login() {
         e.preventDefault()
         try {
             const res = await axios.post("http://localhost:5000/login", form, { withCredentials: true })
-            alert(res.data.message)
-            navigate('/dashboard')
+            if (res.data.success) {
+                alert(res.data.message)
+                navigate('/dashboard')
+            } else {
+                alert(res.data.message || 'Login failed')
+            }
         } catch (error) {
+            const message = error.response?.data?.message || 'Network error'
+            alert(message)
             console.error(error);
         }
     }
@@ -30,11 +36,11 @@ function Login() {
       <div className='w-full max-w-4xl overflow-hidden rounded-[36px] bg-white shadow-2xl sm:flex'>
         <div className='hidden w-1/2 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-700 p-10 sm:block'>
           <div className='h-full flex flex-col justify-center text-white'>
-            <h2 className='text-4xl font-semibold tracking-tight'>Welcome Back</h2>
-            <p className='mt-4 text-slate-300'>Sign in to manage invoices, reports, services, and payments quickly.</p>
+            <h2 className='text-4xl font-semibold tracking-tight'>Bienvenido señor o señorita</h2>
+            <p className='mt-4 text-slate-300'>Inicie sesión para acceder al portal de gestión</p>
             <div className='mt-8 rounded-3xl bg-slate-800/80 p-6'>
               <p className='text-sm uppercase tracking-[0.3em] text-slate-400'>Quick Tip</p>
-              <p className='mt-4 text-slate-200'>Use your username and password to login and access the dashboard.</p>
+              <p className='mt-4 text-slate-200'>Use your username & password</p>
             </div>
           </div>
         </div>
@@ -43,7 +49,7 @@ function Login() {
           <div className='mb-8 text-center'>
             <p className='text-sm uppercase tracking-[0.3em] text-slate-500'>Account access</p>
             <h1 className='mt-3 text-3xl font-semibold text-slate-900'>Login</h1>
-            <p className='mt-2 text-sm text-slate-500'>Enter your credentials to continue to the management portal.</p>
+            <p className='mt-2 text-sm text-slate-500'>Enter your credential mhn</p>
           </div>
 
           <form onSubmit={login} className='space-y-5'>

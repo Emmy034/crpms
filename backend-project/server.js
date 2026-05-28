@@ -3,17 +3,20 @@ const cors = require('cors');
 const session = require('express-session');
 const mysql = require('mysql2');
 const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 
 const app = express();
 const port = 5000;
 
 //middleware
-app.use(express.json());
-
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 app.use(cors({
-    origin:"http://localhost:5173",
-    credentials: true
+    origin: "http://localhost:5173",
+    credentials: true,
+    methods: ['GET','POST','PUT','DELETE','OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 app.use(session({
@@ -21,6 +24,10 @@ app.use(session({
     resave: false,
     saveUninitialized: false
 }));
+const jwtSecret = 'your_jwt_secret_key'; // Change this to a strong secret in production
+const generateToken = (user) => {
+    return jwt.sign({ id: user.id, username: user.username }, jwtSecret, { expiresIn: '1h' });
+}
 
 //db connexn
 const db = mysql.createConnection({
@@ -37,20 +44,83 @@ db.connect((err)=>{
     }
 });
 
+const sanitizeUser = (user) => {
+    if (!user) return null
+    const { password, ...safe } = user
+    return safe
+}
+
 // ==============REGISTER================
 app.post('/register', async(req,res)=>{
-    const {username, password} = req.body;
+    const {username, password, picture} = req.body;
     const hash = await bcrypt.hash(password, 10);
-    db.query('INSERT INTO users(username, password) VALUES(?, ?)',
-        [username, hash], (err,result)=>{
+    db.query('INSERT INTO users(username, password, picture) VALUES(?, ?, ?)',
+        [username, hash, picture || null], (err,result)=>{
             if (err) {
-                res.json({message:"error inserting user"}, err)
-            } else {
-                res.json({message:`Bienvenido, ${username} Buena registrada`});
+                return res.status(500).json({ success: false, message: 'Error inserting user' });
             }
+            res.json({ success: true, message: `Bienvenido, ${username} Buena registrada` });
         }
     );
 });
+
+app.get('/profile', (req, res) => {
+    if (!req.session.user) {
+        return res.status(401).json({ message: 'No session user' });
+    }
+    res.json({ user: sanitizeUser(req.session.user) });
+});
+
+app.put('/profile', async (req, res) => {
+    if (!req.session.user) {
+        return res.status(401).json({ message: 'Not authenticated' })
+    }
+
+    const { username, password, picture } = req.body
+    const updates = []
+    const values = []
+
+    if (username) {
+        updates.push('username=?')
+        values.push(username)
+    }
+
+    if (password) {
+        const hash = await bcrypt.hash(password, 10)
+        updates.push('password=?')
+        values.push(hash)
+    }
+
+    if (picture !== undefined) {
+        updates.push('picture=?')
+        values.push(picture || null)
+    }
+
+    if (!updates.length) {
+        return res.json({ message: 'No changes made' })
+    }
+
+    const sql = `UPDATE users SET ${updates.join(', ')} WHERE username=?`
+    values.push(req.session.user.username)
+
+    db.query(sql, values, (err, result) => {
+        if (err) {
+            return res.status(500).json({ message: 'Error updating account', error: err })
+        }
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ message: 'User not found' })
+        }
+
+        const lookupName = username || req.session.user.username
+        db.query('SELECT * FROM users WHERE username=?', [lookupName], (err2, rows) => {
+            if (err2 || rows.length === 0) {
+                return res.status(500).json({ message: 'Error loading updated user', error: err2 })
+            }
+            req.session.user = rows[0]
+            res.json({ message: 'Account updated', user: sanitizeUser(rows[0]) })
+        })
+    })
+})
 
 //=====================LOGIN===================//
 
@@ -59,21 +129,22 @@ app.post('/login', (req,res)=>{
     db.query('SELECT * FROM users WHERE username=?',
         [username], async(err,result)=>{
             if (err) {
-               res.json({success:false, message:"login error"}, err) 
+               return res.status(500).json({success:false, message:"Login error"});
             }
             if (result.length === 0) {
-               return res.json({success:false, message:"User Not Exist"}); 
+               return res.status(401).json({success:false, message:"User Not Exist"}); 
             }
             const valid = await bcrypt.compare(password, result[0].password);
             if (!valid) {
-                res.json({success:false, message:"Invalid Password"});
+                return res.status(401).json({success:false, message:"Invalid Password"});
             }
             req.session.user = result[0];
 
             res.json({
                 message:"Login Successful",
                 success: true,
-                user: result[0]
+                token: generateToken(result[0]),
+                user: sanitizeUser(result[0])
             });
         }
     );
